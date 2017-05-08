@@ -2,7 +2,7 @@
 
 Region | Launch Template
 ------------ | -------------
-**N. Virginia** (us-east-1) | [![Launch Eth Workshop Stack into Virginia with CloudFormation](/Images/deploy-to-aws.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=eth_stack&templateURL=https://s3.amazonaws.com/ethcore-parity-us-east-1/template.yml)
+**N. Virginia** (us-east-1) | [![Launch Eth Workshop Stack into Virginia with CloudFormation](/images/deploy-to-aws.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=eth_stack&templateURL=https://s3.amazonaws.com/ethcore-parity-us-east-1/template.yml)
 
 
 * input AWS Key for EC2 instance access
