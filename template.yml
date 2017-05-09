@@ -122,6 +122,10 @@ Resources:
       ContainerDefinitions:
        -
         Name: ethcore-parity
+        Command: 
+          - "--ui-interface"
+          - "0.0.0.0"
+          - "--ui-no-validation"
         Cpu: '10'
         Essential: 'true'
         Image: ethcore/parity:stable
@@ -134,8 +138,11 @@ Resources:
             awslogs-stream-prefix: ecs-ethcore-parity
         PortMappings:
          - ContainerPort: 8080
+           HostPort: 8080
          - ContainerPort: 8545
-         - ContainerPort: 8180      
+           HostPort: 8545
+         - ContainerPort: 8180
+           HostPort: 8180		 
       Volumes:
       - Name: my-vol
   ECSALB:
@@ -224,7 +231,7 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       Name: ECSTG
-      Port: 8080
+      Port: 8180
       Protocol: HTTP
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VpcId'
@@ -267,15 +274,15 @@ Resources:
       Cluster: !Ref 'ECSCluster'
       DesiredCount: '1'
       LoadBalancers:
-       - ContainerName: ethcore-parity
-         ContainerPort: '8080'
-         TargetGroupArn: !Ref 'ECSTG'
+#       - ContainerName: ethcore-parity
+#        ContainerPort: '8080'
+#        TargetGroupArn: !Ref 'ECSTG'
 #       - ContainerName: ethcore-parity
 #         ContainerPort: '8545'
 #         TargetGroupArn: !Ref 'ECSTG'
-#       - ContainerName: ethcore-parity
-#         ContainerPort: '8180'
-#         TargetGroupArn: !Ref 'ECSTG'
+       - ContainerName: ethcore-parity
+         ContainerPort: '8180'
+         TargetGroupArn: !Ref 'ECSTG'
       Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'taskdefinition'
   ECSServiceRole:
