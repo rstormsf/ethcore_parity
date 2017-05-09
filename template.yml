@@ -126,6 +126,7 @@ Resources:
           - "--ui-interface"
           - "0.0.0.0"
           - "--ui-no-validation"
+          - "--warp"
         Cpu: '10'
         Essential: 'true'
         Image: ethcore/parity:stable
