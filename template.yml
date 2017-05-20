@@ -14,7 +14,7 @@ Parameters:
     Description: Select a VPC that allows instances access to the Internet.
   SubnetID:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Select at two subnets in your selected VPC.
+    Description: Select two subnets in your selected VPC.
   DesiredCapacity:
     Type: Number
     Default: '1'
@@ -68,8 +68,37 @@ Mappings:
 
 ########################## Resources #######################################
 Resources:
-  ECSCluster:
-    Type: AWS::ECS::Cluster
+  ParityFileSystem: 
+    Type: "AWS::EFS::FileSystem"
+    Properties: 
+      FileSystemTags: 
+        - 
+          Key: "Name"
+          Value: "ParityFileSystem"
+  MountTarget1: 
+    Type: "AWS::EFS::MountTarget"
+    Properties: 
+      FileSystemId: !Ref ParityFileSystem
+      SubnetId: !Select [ 0, !Ref SubnetID ] 
+      SecurityGroups: 
+        - !Ref EfsSecurityGroup
+  MountTarget2: 
+    Type: "AWS::EFS::MountTarget"
+    Properties: 
+      FileSystemId: !Ref ParityFileSystem
+      SubnetId: !Select [ 1, !Ref SubnetID ] 
+      SecurityGroups: 
+        - !Ref EfsSecurityGroup
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS Security Group
+      VpcId: !Ref 'VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '2049'
+          ToPort: '2049'
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
   EcsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -115,6 +144,8 @@ Resources:
     Properties:
       LogGroupName: !Join ['-', [ECSLogGroup, !Ref 'AWS::StackName']]
       RetentionInDays: 14
+  ECSCluster:
+    Type: AWS::ECS::Cluster
   taskdefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -122,14 +153,27 @@ Resources:
       ContainerDefinitions:
        -
         Name: ethcore-parity
+        MountPoints:
+         - ContainerPath: /mnt/parity
+           SourceVolume: efs-vol
         Command: 
           - "--ui-interface"
           - "0.0.0.0"
           - "--ui-no-validation"
           - "--warp"
+          - "--jsonrpc-interface"
+          - "0.0.0.0"
+          - "--jsonrpc-hosts"
+          - "all"
+          - "--log-file"
+          - "/var/log/parity".log"
+          - "--chain"
+          - "kovan"
+          - "--base-path"
+          - "/mnt/parity"     
         Cpu: '10'
         Essential: 'true'
-        Image: ethcore/parity:stable
+        Image: ethcore/parity:nightly
         Memory: '300'
         LogConfiguration:
           LogDriver: awslogs
@@ -143,9 +187,11 @@ Resources:
          - ContainerPort: 8545
            HostPort: 8545
          - ContainerPort: 8180
-           HostPort: 8180		 
+           HostPort: 8180		   
       Volumes:
-      - Name: my-vol
+      - Name: efs-vol
+        Host:
+         SourcePath: /mnt/efs
   ECSALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -153,7 +199,7 @@ Resources:
       Scheme: internet-facing
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
-        Value: '30'
+        Value: '60'
       Subnets: !Ref 'SubnetID'
       SecurityGroups: [!Ref 'EcsALBSecurityGroup']
   ALBListener1:
@@ -259,15 +305,22 @@ Resources:
       IamInstanceProfile: !Ref 'EC2InstanceProfile'
       KeyName: !Ref 'KeyName'
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: !Sub
+         - |
           #!/bin/bash -xe
           yum update -y
+          yum install -y nfs-utils
           yum install -y ecs-init
+          mkdir /mnt/efs
+          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${efsDnsName}:/ /mnt/efs
           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
           yum install -y aws-cfn-bootstrap
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
           service docker start
           start ecs
+         - {
+              efsDnsName: !Join ['', [!Ref ParityFileSystem, '.efs.', !Ref "AWS::Region", '.amazonaws.com']],
+           }
   service:
     Type: AWS::ECS::Service
     DependsOn: ALBListener1
