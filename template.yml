@@ -284,7 +284,9 @@ Resources:
       VpcId: !Ref 'VpcId'
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: ParityFileSystem
+    DependsOn:
+     - MountTarget1
+     - MountTarget2
     Properties:
       VPCZoneIdentifier: !Ref 'SubnetID'
       LaunchConfigurationName: !Ref 'ContainerInstances'
@@ -310,6 +312,7 @@ Resources:
          - |
           #!/bin/bash -xe
           yum update -y
+          yum install -y git
           yum install -y nfs-utils
           yum install -y ecs-init
           mkdir /mnt/efs
