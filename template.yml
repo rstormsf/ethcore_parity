@@ -121,6 +121,10 @@ Resources:
           FromPort: '8180'
           ToPort: '8180'
           SourceSecurityGroupId: !Ref EcsALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref EcsALBSecurityGroup
   EcsALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -138,6 +142,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: '8180'
           ToPort: '8180'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
           CidrIp: 0.0.0.0/0
   CloudwatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -170,9 +178,7 @@ Resources:
           - "--chain"
           - "kovan"
           - "--base-path"
-          - "/mnt/parity"   
-          - "--jsonrpc-apis"
-          - "web3, eth, net, personal, parity, parity_set, traces, rpc, parity_accounts, signer"
+          - "/mnt/parity"
         Cpu: '10'
         Essential: 'true'
         Image: ethcore/parity:nightly
@@ -270,6 +276,28 @@ Resources:
         Values: [/]
       ListenerArn: !Ref 'ALBListener3'
       Priority: 1
+  ALBListener4:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: ECSServiceRole
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref 'ECSTG'
+      LoadBalancerArn: !Ref 'ECSALB'
+      Port: '80'
+      Protocol: HTTP
+  ECSALBListenerRule4:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: ALBListener4
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref 'ECSTG'
+      Conditions:
+      - Field: path-pattern
+        Values: [/]
+      ListenerArn: !Ref 'ALBListener3'
+      Priority: 1
   ECSTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     DependsOn: ECSALB
@@ -320,21 +348,32 @@ Resources:
           yum install -y git
           yum install -y nfs-utils
           yum install -y ecs-init
+          yum install -y aws-cfn-bootstrap
+          yum install httpd -y
+          
           mkdir /mnt/efs
-          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${efsDnsName}:/ /mnt/efs
           cd /mnt/efs
+          mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${efsDnsName}:/ /mnt/efs
           if find . -mindepth 1 -print -quit | grep -q .; then
-            echo not empty, do nothing
+            "echo not empty, do nothing"
           else
-            echo The directory /mnt/efs is empty
+            echo "The directory /mnt/efs is empty"
             git clone https://github.com/jayyousi/ethcore_parity.git repository
-            cp -r ./repository/config/* .
+            cp -r ./repository/config/* .		
+            cp -r ./repository/scripts/* /var/www/cgi-bin/
             rm -rf ./repository/
           fi
+          
           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
-          yum install -y aws-cfn-bootstrap
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+          
           service docker start
+          chkconfig docker on
+		  
+          service httpd start
+          chkconfig httpd on
+          usermod -a -G docker apache
+		  
           start ecs
          - {
               efsDnsName: !Join ['', [!Ref ParityFileSystem, '.efs.', !Ref "AWS::Region", '.amazonaws.com']],
@@ -466,3 +505,6 @@ Outputs:
     Value: !Join ['', [!GetAtt [ECSALB, DNSName]]]
   taskdef:
     Value: !Ref 'taskdefinition'
+  TOKEN:
+    Description: Your Token Generation URL
+    Value: !Join ['', [!GetAtt [ECSALB, DNSName]], '/cgi-bin/generate_token.sh']
