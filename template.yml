@@ -350,7 +350,6 @@ Resources:
           yum install -y ecs-init
           yum install -y aws-cfn-bootstrap
           yum install httpd -y
-          
           mkdir /mnt/efs
           cd /mnt/efs
           mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${efsDnsName}:/ /mnt/efs
@@ -363,17 +362,13 @@ Resources:
             cp -r ./repository/scripts/* /var/www/cgi-bin/
             rm -rf ./repository/
           fi
-          
           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
-          
           service docker start
           chkconfig docker on
-		  
           service httpd start
           chkconfig httpd on
           usermod -a -G docker apache
-		  
           start ecs
          - {
               efsDnsName: !Join ['', [!Ref ParityFileSystem, '.efs.', !Ref "AWS::Region", '.amazonaws.com']],
@@ -507,4 +502,4 @@ Outputs:
     Value: !Ref 'taskdefinition'
   TOKEN:
     Description: Your Token Generation URL
-    Value: !Join ['', [!GetAtt [ECSALB, DNSName]], '/cgi-bin/generate_token.sh']
+    Value: !Join ['', [!GetAtt [ECSALB, DNSName] , "/cgi-bin/generate_token.sh"]]
