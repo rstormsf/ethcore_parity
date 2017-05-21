@@ -170,7 +170,9 @@ Resources:
           - "--chain"
           - "kovan"
           - "--base-path"
-          - "/mnt/parity"     
+          - "/mnt/parity"   
+          - "--jsonrpc-apis"
+          - "web3, eth, net, personal, parity, parity_set, traces, rpc, parity_accounts, signer"
         Cpu: '10'
         Essential: 'true'
         Image: ethcore/parity:nightly
@@ -282,6 +284,9 @@ Resources:
       Protocol: HTTP
       UnhealthyThresholdCount: 3
       VpcId: !Ref 'VpcId'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 0
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
