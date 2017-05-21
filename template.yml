@@ -195,126 +195,46 @@ Resources:
          - ContainerPort: 8545
            HostPort: 8545
          - ContainerPort: 8180
-           HostPort: 8180		   
+           HostPort: 8180			   
       Volumes:
       - Name: efs-vol
         Host:
          SourcePath: /mnt/efs
-  ECSALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: ECSALB
-      Scheme: internet-facing
-      LoadBalancerAttributes:
-      - Key: idle_timeout.timeout_seconds
-        Value: '60'
-      Subnets: !Ref 'SubnetID'
-      SecurityGroups: [!Ref 'EcsALBSecurityGroup']
-  ALBListener1:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: ECSServiceRole
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      LoadBalancerArn: !Ref 'ECSALB'
-      Port: '8080'
-      Protocol: HTTP
-  ECSALBListenerRule1:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    DependsOn: ALBListener1
-    Properties:
-      Actions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      Conditions:
-      - Field: path-pattern
-        Values: [/]
-      ListenerArn: !Ref 'ALBListener1'
-      Priority: 1
-  ALBListener2:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: ECSServiceRole
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      LoadBalancerArn: !Ref 'ECSALB'
-      Port: '8545'
-      Protocol: HTTP
-  ECSALBListenerRule2:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    DependsOn: ALBListener2
-    Properties:
-      Actions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      Conditions:
-      - Field: path-pattern
-        Values: [/]
-      ListenerArn: !Ref 'ALBListener2'
-      Priority: 1
-  ALBListener3:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: ECSServiceRole
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      LoadBalancerArn: !Ref 'ECSALB'
-      Port: '8180'
-      Protocol: HTTP
-  ECSALBListenerRule3:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    DependsOn: ALBListener3
-    Properties:
-      Actions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      Conditions:
-      - Field: path-pattern
-        Values: [/]
-      ListenerArn: !Ref 'ALBListener3'
-      Priority: 1
-  ALBListener4:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: ECSServiceRole
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      LoadBalancerArn: !Ref 'ECSALB'
-      Port: '80'
-      Protocol: HTTP
-  ECSALBListenerRule4:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    DependsOn: ALBListener4
-    Properties:
-      Actions:
-      - Type: forward
-        TargetGroupArn: !Ref 'ECSTG'
-      Conditions:
-      - Field: path-pattern
-        Values: [/]
-      ListenerArn: !Ref 'ALBListener3'
-      Priority: 1
-  ECSTG:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: ECSALB
-    Properties:
-      HealthCheckIntervalSeconds: 60
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 30
-      HealthyThresholdCount: 3
-      Name: ECSTG
-      Port: 8180
-      Protocol: HTTP
-      UnhealthyThresholdCount: 3
-      VpcId: !Ref 'VpcId'
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 0
+  ECSELB:
+      Type: "AWS::ElasticLoadBalancing::LoadBalancer"
+      Properties:
+        CrossZone: true
+        HealthCheck:
+          HealthyThreshold: 3
+          Interval: 30
+          Target: "HTTP:8180/"
+          Timeout: 10
+          UnhealthyThreshold: 3
+        LoadBalancerName: ECSELB
+        Listeners:
+          - LoadBalancerPort: '80'
+            InstancePort: '80'
+            Protocol: HTTP
+            InstanceProtocol: HTTP
+          - LoadBalancerPort: '8180'
+            InstancePort: '8180'
+            Protocol: HTTP
+            InstanceProtocol: HTTP
+          - LoadBalancerPort: '8080'
+            InstancePort: '8080'
+            Protocol: HTTP
+            InstanceProtocol: HTTP
+          - LoadBalancerPort: '8545'
+            InstancePort: '8545'
+            Protocol: HTTP
+            InstanceProtocol: HTTP
+        Scheme: internet-facing
+        SecurityGroups:
+          - !Ref EcsALBSecurityGroup 
+        Subnets: !Ref SubnetID
+        Tags:
+          - Key: Name
+            Value: ECSELB
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
@@ -322,6 +242,8 @@ Resources:
      - MountTarget2
     Properties:
       VPCZoneIdentifier: !Ref 'SubnetID'
+      LoadBalancerNames:
+        - !Ref ECSELB
       LaunchConfigurationName: !Ref 'ContainerInstances'
       MinSize: '1'
       MaxSize: !Ref 'MaxSize'
@@ -352,22 +274,24 @@ Resources:
           yum install -y httpd
 
           mkdir /mnt/efs
-          cd /mnt/efs
           mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${efsDnsName}:/ /mnt/efs
 
-          if find . -mindepth 1 -print -quit | grep -q .; then
-            "echo not empty, do nothing"
+          if find /mnt/efs -mindepth 1 -print -quit | grep -q .; then
+            echo "not empty, do nothing"
           else
             echo "The directory /mnt/efs is empty"
-            git clone https://github.com/jayyousi/ethcore_parity.git repository
-            cp -r ./repository/config/* .		
-            cp -r ./repository/scripts/* /var/www/cgi-bin/
-            rm -rf ./repository/
+            cd /mnt/efs
+            git clone -q https://github.com/jayyousi/ethcore_parity.git repository && echo "cloned"
+            cp -r /mnt/efs/repository/config/* /mnt/efs
+            cp -r /mnt/efs/repository/scripts/* /var/www/cgi-bin/
+            chmod a+x /var/www/cgi-bin/*
+            rm -rf /mnt/efs/repository/
           fi
 
           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
           
+          echo "success" >> /var/www/html/index.html
           usermod -a -G docker apache
           service httpd start
           chkconfig httpd on
@@ -381,79 +305,10 @@ Resources:
            }
   service:
     Type: AWS::ECS::Service
-    DependsOn: ALBListener1
     Properties:
       Cluster: !Ref 'ECSCluster'
       DesiredCount: '1'
-      LoadBalancers:
-#       - ContainerName: ethcore-parity
-#        ContainerPort: '8080'
-#        TargetGroupArn: !Ref 'ECSTG'
-#       - ContainerName: ethcore-parity
-#         ContainerPort: '8545'
-#         TargetGroupArn: !Ref 'ECSTG'
-       - ContainerName: ethcore-parity
-         ContainerPort: '8180'
-         TargetGroupArn: !Ref 'ECSTG'
-      Role: !Ref 'ECSServiceRole'
       TaskDefinition: !Ref 'taskdefinition'
-  ECSServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: [ecs.amazonaws.com]
-          Action: ['sts:AssumeRole']
-      Path: /
-      Policies:
-      - PolicyName: ecs-service
-        PolicyDocument:
-          Statement:
-          - Effect: Allow
-            Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
-              'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
-              'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
-            Resource: '*'
-  ServiceScalingTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    DependsOn: service
-    Properties:
-      MaxCapacity: 2
-      MinCapacity: 1
-      ResourceId: !Join ['', [service/, !Ref 'ECSCluster', /, !GetAtt [service, Name]]]
-      RoleARN: !GetAtt [AutoscalingRole, Arn]
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-  ServiceScalingPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: AStepPolicy
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref 'ServiceScalingTarget'
-      StepScalingPolicyConfiguration:
-        AdjustmentType: PercentChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-        - MetricIntervalLowerBound: 0
-          ScalingAdjustment: 200
-  ALB500sAlarmScaleUp:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      EvaluationPeriods: '1'
-      Statistic: Average
-      Threshold: '10'
-      AlarmDescription: Alarm if our ALB generates too many HTTP 500s.
-      Period: '60'
-      AlarmActions: [!Ref 'ServiceScalingPolicy']
-      Namespace: AWS/ApplicationELB
-      Dimensions:
-      - Name: ECSService
-        Value: !Ref 'service'
-      ComparisonOperator: GreaterThanThreshold
-      MetricName: HTTPCode_ELB_5XX_Count
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -473,24 +328,6 @@ Resources:
               'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
               'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents']
             Resource: '*'
-  AutoscalingRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: [application-autoscaling.amazonaws.com]
-          Action: ['sts:AssumeRole']
-      Path: /
-      Policies:
-      - PolicyName: service-autoscaling
-        PolicyDocument:
-          Statement:
-          - Effect: Allow
-            Action: ['application-autoscaling:*', 'cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm',
-              'ecs:DescribeServices', 'ecs:UpdateService']
-            Resource: '*'
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -501,11 +338,11 @@ Outputs:
     Value: !Ref 'service'
   ecscluster:
     Value: !Ref 'ECSCluster'
-  ECSALB:
+  ECSELB:
     Description: Your ALB DNS URL
-    Value: !Join ['', [!GetAtt [ECSALB, DNSName]]]
+    Value: !Join ['', [!GetAtt [ECSELB, DNSName]]]
   taskdef:
     Value: !Ref 'taskdefinition'
   TOKEN:
     Description: Your Token Generation URL
-    Value: !Join ['', [!GetAtt [ECSALB, DNSName] , "/cgi-bin/generate_token.sh"]]
+    Value: !Join ['', [!GetAtt [ECSELB, DNSName] , "/cgi-bin/generate_token.sh"]]
