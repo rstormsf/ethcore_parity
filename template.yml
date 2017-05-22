@@ -282,7 +282,7 @@ Resources:
             echo "The directory /mnt/efs is empty"
             cd /mnt/efs
             git clone -q https://github.com/jayyousi/ethcore_parity.git repository && echo "cloned"
-            cp -r /mnt/efs/repository/config/* /mnt/efs
+            #cp -r /mnt/efs/repository/config/* /mnt/efs
             cp -r /mnt/efs/repository/scripts/* /var/www/cgi-bin/
             chmod a+x /var/www/cgi-bin/*
             rm -rf /mnt/efs/repository/
