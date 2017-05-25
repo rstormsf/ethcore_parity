@@ -33,6 +33,19 @@ Parameters:
       c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
       r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
     ConstraintDescription: Please choose a valid instance type.
+  Config:
+    Description: node.toml value
+    Type: String
+  Password:
+    Description: node.pwds
+    Type: String
+  Chain:
+    Description: chain.json
+    Type: String
+  Key:
+    Description: key.json
+    Type: String
+
 
 ########################## Mappings #######################################
 Mappings:
@@ -175,8 +188,8 @@ Resources:
           - "all"
           - "--log-file"
           - "/var/log/parity.log"
-          - "--chain"
-          - "kovan"
+#          - "--chain"
+#          - "kovan"
           - "--base-path"
           - "/mnt/parity"
         Cpu: '10'
@@ -286,6 +299,13 @@ Resources:
             cp -r /mnt/efs/repository/scripts/* /var/www/cgi-bin/
             chmod a+x /var/www/cgi-bin/*
             rm -rf /mnt/efs/repository/
+
+            echo '${Config}' >> /mnt/efs/node.toml
+            echo '${Password}' >> /mnt/efs/node.pwds
+            echo '${Chain}' >> /mnt/efs/chain.json
+            
+            mkdir keys
+            echo '${Key}' >> /mnt/efs/keys/key.json
           fi
 
           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
